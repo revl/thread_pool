@@ -25,11 +25,14 @@ public:
     // Initializes this thread pool instance but does not start any threads.
     // No threads will be started until resize() is called with a non-zero
     // 'max_threads' value.
-    thread_pool();
+    thread_pool() = default;
 
     // Initializes this thread pool instance and starts the specified minimum
     // number of worker threads.
-    thread_pool(int min_threads, int max_threads);
+    thread_pool(int min_threads, int max_threads)
+    {
+        resize(min_threads, max_threads);
+    }
 
     // Enqueues a task, which must be a callable object that has no arguments.
     //
@@ -45,7 +48,13 @@ public:
     {
         using PT = std::packaged_task<decltype(f())()>;
         auto pt = std::make_shared<PT>(std::move(f));
-        add_task_and_wake_up_thread(std::bind(&PT::operator(), pt));
+
+        {
+            std::lock_guard<std::mutex> lock(global_mutex);
+            task_queue.emplace_back([pt] { (*pt)(); });
+            wake_up_or_start_thread();
+        }
+
         return pt->get_future();
     }
 
@@ -59,10 +68,16 @@ public:
     void resize(int min_threads, int max_threads);
 
     // Returns the number of currently running threads.
-    int thread_count() const;
+    int thread_count() const
+    {
+        return current_thread_count;
+    }
 
     // Returns the size of the task queue.
-    int waiting_tasks() const;
+    size_t waiting_tasks() const
+    {
+        return task_queue.size();
+    }
 
     // Waits for completion of all running tasks and terminates all worker
     // threads. To start the threads again, call resize().
@@ -77,7 +92,7 @@ public:
     thread_pool(thread_pool&& other) noexcept;
 
 private:
-    void add_task_and_wake_up_thread(std::function<void()>&& new_task);
+    void wake_up_or_start_thread();
 
     // The queue of tasks to be processed.
     std::deque<std::function<void()>> task_queue;
@@ -87,21 +102,21 @@ private:
 
     // The first element in the linked list of threads that are currently
     // processing tasks.
-    thread_wrapper* active_threads;
+    thread_wrapper* active_threads = nullptr;
 
     // The first element in the linked list of threads that are dormant
     // (because the task queue is empty).
-    thread_wrapper* suspended_threads;
+    thread_wrapper* suspended_threads = nullptr;
 
     // The first element in the linked list of threads that have exited.
-    thread_wrapper* finished_threads;
+    thread_wrapper* finished_threads = nullptr;
 
     // The number of currently running threads (the total number of threads
     // in the 'active_threads' and 'suspended_threads' lists combined).
-    int current_thread_count;
+    int current_thread_count = 0;
 
     // The maximum number of threads that this pool is allowed to have.
-    int max_thread_count;
+    int max_thread_count = 0;
 
     // The mutex that provides exclusive access to the data members of this
     // thread pool.
@@ -110,15 +125,5 @@ private:
     thread_pool(const thread_pool&) = delete;
     thread_pool& operator=(const thread_pool&) = delete;
 };
-
-inline int thread_pool::thread_count() const
-{
-    return current_thread_count;
-}
-
-inline int thread_pool::waiting_tasks() const
-{
-    return static_cast<int>(task_queue.size());
-}
 
 #endif // THREAD_POOL_ON_MUTEXES_H

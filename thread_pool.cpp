@@ -8,8 +8,7 @@ struct thread_pool::thread_wrapper final : std::thread {
     // Starts a new worker thread.
     thread_wrapper(thread_pool* p) :
         std::thread(&thread_wrapper::thread_proc, this),
-        pool(p),
-        signaled(false)
+        pool(p)
     {
         signaling_mutex.lock();
 
@@ -18,44 +17,25 @@ struct thread_pool::thread_wrapper final : std::thread {
         ++p->current_thread_count;
     }
 
+    // The worker thread routine.
+    void thread_proc();
+
     // Wakes this thread up.
     void signal()
     {
         do {
             signaling_mutex.unlock();
             signaling_mutex.lock();
-        } while (!signaled);
+        } while (!signal_received);
 
-        signaled = false;
-    }
-
-    // Waits for this thread to finish, removes it from the containing
-    // list, and deletes this object.
-    void join_and_delete()
-    {
-        pool->global_mutex.unlock();
-
-        join();
-
-        pool->global_mutex.lock();
-
-        unlink();
-
-        delete this;
-    }
-
-    // Joins all threads that are in the list of finished threads.
-    static void join_all_finished(thread_pool* p)
-    {
-        while (p->finished_threads != nullptr)
-            p->finished_threads->join_and_delete();
+        signal_received = false;
     }
 
     // Suspends this thread until another thread calls the signal() method.
     void wait_for_signal()
     {
         std::lock_guard<std::mutex> lock(signaling_mutex);
-        signaled = true;
+        signal_received = true;
     }
 
     // Detaches this thread from the containing list.
@@ -91,8 +71,27 @@ struct thread_pool::thread_wrapper final : std::thread {
         }
     }
 
-    // The worker thread routine.
-    void thread_proc();
+    // Waits for this thread to finish, removes it from the containing
+    // list, and deletes this object.
+    void join_and_delete()
+    {
+        pool->global_mutex.unlock();
+
+        join();
+
+        pool->global_mutex.lock();
+
+        unlink();
+
+        delete this;
+    }
+
+    // Joins all threads that are in the list of finished threads.
+    static void join_all_finished(thread_pool* p)
+    {
+        while (p->finished_threads != nullptr)
+            p->finished_threads->join_and_delete();
+    }
 
     // The thread pool object that this thread belongs to.
     thread_pool* pool;
@@ -113,7 +112,7 @@ struct thread_pool::thread_wrapper final : std::thread {
     // when the master thread unlocks and then immediately locks the signaling
     // mutex after the worker thread has registered itself as available, but
     // before it acquired a lock on the signaling mutex.
-    bool signaled;
+    bool signal_received = false;
 };
 
 void thread_pool::thread_wrapper::thread_proc()
@@ -149,19 +148,6 @@ void thread_pool::thread_wrapper::thread_proc()
     --pool->current_thread_count;
 
     pool->global_mutex.unlock();
-}
-
-thread_pool::thread_pool() :
-    active_threads(nullptr),
-    suspended_threads(nullptr),
-    finished_threads(nullptr),
-    current_thread_count(0),
-    max_thread_count(0)
-{}
-
-thread_pool::thread_pool(int min_threads, int max_threads) : thread_pool()
-{
-    resize(min_threads, max_threads);
 }
 
 void thread_pool::resize(int min_threads, int max_threads)
@@ -233,19 +219,15 @@ thread_pool::~thread_pool()
     }
 }
 
-void thread_pool::add_task_and_wake_up_thread(std::function<void()>&& new_task)
+void thread_pool::wake_up_or_start_thread()
 {
-    std::lock_guard<std::mutex> lock(global_mutex);
-
-    task_queue.emplace_back(std::move(new_task));
-
     if (suspended_threads != nullptr)
         suspended_threads->signal();
     else if (current_thread_count < max_thread_count)
         new thread_wrapper(this);
 }
 
-thread_pool::thread_pool(thread_pool&& other) noexcept : thread_pool()
+thread_pool::thread_pool(thread_pool&& other) noexcept
 {
     std::lock_guard<std::mutex> lock(other.global_mutex);
 
