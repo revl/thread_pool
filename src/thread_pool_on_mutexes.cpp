@@ -41,13 +41,15 @@ struct thread_pool::thread_wrapper final : std::thread {
     // Detaches this thread from the containing list.
     void unlink()
     {
-        if (next != nullptr)
+        if (next != nullptr) {
             next->prev = prev;
+        }
 
-        if (prev != nullptr)
+        if (prev != nullptr) {
             prev->next = next;
-        else
+        } else {
             *current_list_head = next;
+        }
     }
 
     // Inserts this thread into the specified list.
@@ -56,8 +58,9 @@ struct thread_pool::thread_wrapper final : std::thread {
         if (*list_head != nullptr) {
             (next = *list_head)->prev = this;
             prev = nullptr;
-        } else
+        } else {
             next = prev = nullptr;
+        }
 
         *(current_list_head = list_head) = this;
     }
@@ -89,8 +92,9 @@ struct thread_pool::thread_wrapper final : std::thread {
     // Joins all threads that are in the list of finished threads.
     static void join_all_finished(thread_pool* p)
     {
-        while (p->finished_threads != nullptr)
+        while (p->finished_threads != nullptr) {
             p->finished_threads->join_and_delete();
+        }
     }
 
     // The thread pool object that this thread belongs to.
@@ -169,8 +173,9 @@ void thread_pool::resize(int min_threads, int max_threads)
         for (thread_wrapper* t = suspended_threads; t != nullptr; t = t->next) {
             t->signal();
 
-            if (--delta == 0)
+            if (--delta == 0) {
                 break;
+            }
         }
     } else {
         // Check if the number of running threads is fewer than 'min_threads'
@@ -178,15 +183,17 @@ void thread_pool::resize(int min_threads, int max_threads)
         // tasks in the queue.
         delta = current_thread_count + static_cast<int>(task_queue.size());
 
-        if (delta > max_threads)
+        if (delta > max_threads) {
             delta = max_threads;
-        else if (delta < min_threads)
+        } else if (delta < min_threads) {
             delta = min_threads;
+        }
 
         delta -= current_thread_count;
 
-        while (--delta >= 0)
+        while (--delta >= 0) {
             new thread_wrapper(this);
+        }
     }
 
     thread_wrapper::join_all_finished(this);
@@ -204,8 +211,9 @@ void thread_pool::shutdown()
         suspended_threads->join_and_delete();
     }
 
-    while (active_threads != nullptr)
+    while (active_threads != nullptr) {
         active_threads->join_and_delete();
+    }
 
     thread_wrapper::join_all_finished(this);
 }
@@ -221,10 +229,11 @@ thread_pool::~thread_pool()
 
 void thread_pool::wake_up_or_start_thread()
 {
-    if (suspended_threads != nullptr)
+    if (suspended_threads != nullptr) {
         suspended_threads->signal();
-    else if (current_thread_count < max_thread_count)
+    } else if (current_thread_count < max_thread_count) {
         new thread_wrapper(this);
+    }
 }
 
 thread_pool::thread_pool(thread_pool&& other) noexcept
