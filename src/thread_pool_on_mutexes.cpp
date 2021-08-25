@@ -4,11 +4,10 @@
 #include <cassert>
 
 // Element of the linked lists in the thread pool object.
-struct thread_pool::thread_wrapper final : std::thread {
+struct thread_pool::thread_wrapper final {
     // Starts a new worker thread.
     thread_wrapper(thread_pool* p) :
-        std::thread(&thread_wrapper::thread_proc, this),
-        pool(p)
+        pool(p), thread(&thread_wrapper::thread_proc, this)
     {
         signaling_mutex.lock();
 
@@ -80,7 +79,7 @@ struct thread_pool::thread_wrapper final : std::thread {
     {
         pool->global_mutex.unlock();
 
-        join();
+        thread.join();
 
         pool->global_mutex.lock();
 
@@ -99,6 +98,9 @@ struct thread_pool::thread_wrapper final : std::thread {
 
     // The thread pool object that this thread belongs to.
     thread_pool* pool;
+
+    // The thread object that represents this thread of execution.
+    std::thread thread;
 
     // The list in the pool object that contains this thread.
     thread_wrapper** current_list_head;
