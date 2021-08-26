@@ -1,4 +1,4 @@
-#include <thread_pool_on_mutexes/thread_pool_on_mutexes.hpp>
+#include <thread_pool/thread_pool.hpp>
 
 #include <thread>
 #include <cassert>

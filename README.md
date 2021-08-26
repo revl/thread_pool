@@ -1,5 +1,5 @@
-thread_pool_on_mutexes
-======================
+thread_pool
+===========
 
 This thread pool implementation uses C++11 synchronization primitives and
 provides a clean and concise interface.
@@ -9,7 +9,7 @@ Interface
 
  1. Initialization
 
-        #include <thread_pool_on_mutexes/thread_pool_on_mutexes.hpp>
+        #include <thread_pool/thread_pool.hpp>
 
         int min_threads = 2;
         int max_threads = 8;

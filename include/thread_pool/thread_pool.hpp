@@ -1,5 +1,5 @@
-#ifndef THREAD_POOL_ON_MUTEXES_H
-#define THREAD_POOL_ON_MUTEXES_H
+#ifndef THREAD_POOL_HPP
+#define THREAD_POOL_HPP
 
 #include <future>
 #include <memory>
@@ -121,4 +121,4 @@ private:
     thread_pool& operator=(const thread_pool&) = delete;
 };
 
-#endif // THREAD_POOL_ON_MUTEXES_H
+#endif // THREAD_POOL_HPP
