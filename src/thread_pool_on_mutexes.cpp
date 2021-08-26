@@ -125,7 +125,7 @@ void thread_pool::thread_wrapper::thread_proc()
 {
     pool->global_mutex.lock();
 
-    do {
+    while (pool->current_thread_count <= pool->max_thread_count) {
         if (pool->task_queue.empty()) {
             move_to(&pool->suspended_threads);
 
@@ -147,7 +147,7 @@ void thread_pool::thread_wrapper::thread_proc()
         pool->global_mutex.lock();
 
         join_all_finished(pool);
-    } while (pool->current_thread_count <= pool->max_thread_count);
+    }
 
     move_to(&pool->finished_threads);
 
