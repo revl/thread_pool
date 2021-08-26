@@ -132,9 +132,11 @@ void thread_pool::thread_wrapper::thread_proc()
             pool->global_mutex.unlock();
 
             wait_for_signal();
-        } else {
-            move_to(&pool->active_threads);
 
+            pool->global_mutex.lock();
+
+            move_to(&pool->active_threads);
+        } else {
             std::function<void()> task = std::move(pool->task_queue.front());
             pool->task_queue.pop_front();
 
@@ -142,9 +144,9 @@ void thread_pool::thread_wrapper::thread_proc()
 
             // The packaged_task class takes care of the potential exceptions.
             task();
-        }
 
-        pool->global_mutex.lock();
+            pool->global_mutex.lock();
+        }
 
         join_all_finished(pool);
     }
