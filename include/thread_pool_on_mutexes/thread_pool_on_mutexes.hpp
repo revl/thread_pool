@@ -86,11 +86,6 @@ public:
     // Calls shutdown().
     ~thread_pool();
 
-    // Allows for moving thread pool instances. Note that in the unlikely
-    // event that 'other.global_mutex.lock()' throws an exception, the
-    // program will terminate.
-    thread_pool(thread_pool&& other) noexcept;
-
 private:
     void wake_up_or_start_thread();
 

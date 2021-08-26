@@ -237,30 +237,3 @@ void thread_pool::wake_up_or_start_thread()
         new thread_wrapper(this);
     }
 }
-
-thread_pool::thread_pool(thread_pool&& other) noexcept
-{
-    std::lock_guard<std::mutex> lock(other.global_mutex);
-
-    task_queue = std::move(other.task_queue);
-
-    auto move_thread_list = [this](thread_wrapper** to, thread_wrapper** from) {
-        *to = *from;
-        *from = nullptr;
-
-        for (thread_wrapper* t = *from; t != nullptr; t = t->next) {
-            t->pool = this;
-            t->current_list_head = to;
-        }
-    };
-
-    move_thread_list(&active_threads, &other.active_threads);
-    move_thread_list(&suspended_threads, &other.suspended_threads);
-    move_thread_list(&finished_threads, &other.finished_threads);
-
-    current_thread_count = other.current_thread_count;
-    other.current_thread_count = 0;
-
-    max_thread_count = other.max_thread_count;
-    other.max_thread_count = 0;
-}
