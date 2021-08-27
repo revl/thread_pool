@@ -5,7 +5,7 @@
 #include <memory>
 #include <deque>
 #include <functional>
-#include <mutex>
+#include <condition_variable>
 
 // A thread pool implementation that uses only std::mutex for synchronization
 // and signaling.
@@ -50,9 +50,9 @@ public:
         auto pt = std::make_shared<PT>(std::move(f));
 
         {
-            std::lock_guard<std::mutex> lock(global_mutex);
+            std::unique_lock<std::mutex> lock(global_mutex);
             task_queue.emplace_back([pt] { (*pt)(); });
-            wake_up_or_start_thread();
+            wake_up_or_start_thread(lock);
         }
 
         return pt->get_future();
@@ -70,7 +70,7 @@ public:
     // Returns the number of currently running threads.
     int thread_count() const
     {
-        return current_thread_count;
+        return total_thread_count;
     }
 
     // Returns the size of the task queue.
@@ -87,7 +87,7 @@ public:
     ~thread_pool();
 
 private:
-    void wake_up_or_start_thread();
+    void wake_up_or_start_thread(std::unique_lock<std::mutex>& lock);
 
     // The queue of tasks to be processed.
     std::deque<std::function<void()>> task_queue;
@@ -95,27 +95,25 @@ private:
     struct thread_wrapper;
     friend struct thread_wrapper;
 
-    // The first element in the linked list of threads that are currently
-    // processing tasks.
-    thread_wrapper* active_threads = nullptr;
-
-    // The first element in the linked list of threads that are dormant
-    // (because the task queue is empty).
-    thread_wrapper* suspended_threads = nullptr;
-
     // The first element in the linked list of threads that have exited.
     thread_wrapper* finished_threads = nullptr;
 
-    // The number of currently running threads (the total number of threads
-    // in the 'active_threads' and 'suspended_threads' lists combined).
-    int current_thread_count = 0;
+    // The total number of worker threads.
+    int total_thread_count = 0;
+
+    // The number of threads that are dormant because the task queue is empty.
+    int sleeping_thread_count = 0;
 
     // The maximum number of threads that this pool is allowed to have.
     int max_thread_count = 0;
 
-    // The mutex that provides exclusive access to the data members of this
-    // thread pool.
+    // This mutex provides exclusive access to the data members of this thread
+    // pool and is used in combination with the conditional variable below.
     std::mutex global_mutex;
+
+    // This conditional variable is used to wait for tasks and to wake up idle
+    // threads.
+    std::condition_variable cv;
 
     thread_pool(const thread_pool&) = delete;
     thread_pool& operator=(const thread_pool&) = delete;
