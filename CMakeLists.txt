@@ -14,6 +14,12 @@ endif()
 
 add_library(${PROJECT_NAME} src/${PROJECT_NAME}.cpp)
 
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
+
+target_link_libraries(${PROJECT_NAME} Threads::Threads)
+
 target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<INSTALL_INTERFACE:include>
@@ -66,6 +72,20 @@ if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
 	)
 
 	export(PACKAGE ${EXPORT_NAME})
+
+	include(CTest)
+
+	if(BUILD_TESTING)
+		option(BUILD_COVERAGE "Enable code coverage report" OFF)
+
+		if(BUILD_COVERAGE)
+			include(CodeCoverage)
+
+			append_coverage_compiler_flags()
+		endif()
+
+		add_subdirectory(tests)
+	endif()
 
 	include(InstallRequiredSystemLibraries)
 	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
