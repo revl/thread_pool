@@ -3,7 +3,7 @@
 #include <thread>
 #include <cassert>
 
-// Element of the linked lists in the thread pool object.
+// Each thread_wrapper object represents a single worker thread.
 struct thread_pool::thread_wrapper final {
     // Starts a new worker thread.
     thread_wrapper(thread_pool* p) :
@@ -39,7 +39,7 @@ struct thread_pool::thread_wrapper final {
     std::thread thread;
 
     // When this thread finishes, it will insert itself into the
-    // finished_threads list in the parent thread pool.
+    // finished_threads list of the parent thread pool.
     thread_wrapper* next_finished;
 };
 
@@ -97,7 +97,7 @@ void thread_pool::resize(int min_threads, int max_threads)
         } while (--delta != 0);
         lock.lock();
     } else {
-        // Check if the number of running threads is fewer than 'min_threads'
+        // Check if the number of running threads is less than 'min_threads'
         // or if more threads can be started to accommodate the remaining
         // tasks in the queue.
         delta = total_thread_count + static_cast<int>(task_queue.size());
@@ -111,7 +111,7 @@ void thread_pool::resize(int min_threads, int max_threads)
         delta -= total_thread_count;
 
         while (--delta >= 0) {
-            new thread_wrapper(this);
+            start_new_thread();
         }
     }
 
@@ -142,12 +142,7 @@ thread_pool::~thread_pool()
     }
 }
 
-void thread_pool::wake_up_or_start_thread(std::unique_lock<std::mutex>& lock)
+void thread_pool::start_new_thread()
 {
-    if (sleeping_thread_count > 0) {
-        lock.unlock();
-        cv.notify_one();
-    } else if (total_thread_count < max_thread_count) {
-        new thread_wrapper(this);
-    }
+    new thread_wrapper(this);
 }

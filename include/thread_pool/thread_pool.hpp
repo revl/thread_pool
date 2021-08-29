@@ -7,8 +7,8 @@
 #include <functional>
 #include <condition_variable>
 
-// A thread pool implementation that uses only std::mutex for synchronization
-// and signaling.
+// A thread pool implementation based on C++11 thread and synchronization
+// classes.
 //
 // Usage example:
 //  thread_pool tp(4, 8);
@@ -52,7 +52,12 @@ public:
         {
             std::unique_lock<std::mutex> lock(global_mutex);
             task_queue.emplace_back([pt] { (*pt)(); });
-            wake_up_or_start_thread(lock);
+            if (sleeping_thread_count > 0) {
+                lock.unlock();
+                cv.notify_one();
+            } else if (total_thread_count < max_thread_count) {
+                start_new_thread();
+            }
         }
 
         return pt->get_future();
@@ -64,7 +69,7 @@ public:
     // If the number of currently running tasks in the pool already exceeds
     // 'max_threads', this method returns without directly affecting the
     // threads that run those tasks. Instead, the threads will terminate
-    // gradually as their tasks complete until only 'max_threads' are running.
+    // gradually as their tasks complete until only 'max_threads' remain.
     void resize(int min_threads, int max_threads);
 
     // Returns the number of currently running threads.
@@ -87,7 +92,7 @@ public:
     ~thread_pool();
 
 private:
-    void wake_up_or_start_thread(std::unique_lock<std::mutex>& lock);
+    void start_new_thread();
 
     // The queue of tasks to be processed.
     std::deque<std::function<void()>> task_queue;
